@@ -287,7 +287,7 @@ pub type Something<T> = StorageValue<_, u32>;
 * 其他复杂类型：Option<T>, tuple, enum, struct
 * 内置自定义类型：Moment时间戳, AccountId公钥
 
-数值类型u8的定义：
+#### 数值类型u8的定义：
 ```rust
 #[pallet::storage]
 #[pallet::getter(fn my_unsigned_number)]
@@ -309,7 +309,7 @@ OptionQuery如果没有值就为None。
 更多API，请参考文档：
 https://crates.parity.io/frame_support/pallet_prelude/struct.StorageValue.html
 
-数值类型u8, i8, u32, i32, u64, i64, u128, i128的安全操作：
+数值类型u8, i8, u32, i32, u64, i64, u128, i128的安全操作，避免溢出操作：
 * 返回Result类型：checked_add, checked_sub, checked_mul, checked_div
 
     // fail the transaction if error
@@ -327,7 +327,201 @@ use sp_core::U256;
 #[pallet::getter(fn my_big_integer)]
 pub type MyBigInteger<T> = StorageValue<_, U256>;
 ```
-    
+引入大整数类型sp_core::U256
+
+操作方法： checked_add, overflowing_mul...
+
+更多API，参考文档https://crates.parity.io/sp_core/struct.U256.html
+
+#### bool 类型定义：
+```rust
+#[pallet::storage]
+#[pallet::getter(fn my_bool)]
+pub type MyBool<T> = StorageValue<_, bool>;
+```
+我们定义存储单元名字：MyBool，存储单值类型StorageValue，存储bool类型。通常链上通过布尔类型存储一些标志性信息，根据
+链上存储的标志性信息，在代码中进行逻辑判断。默认OptionQuery，对于ValueQuery，默认值false。
+* if else 逻辑判断
+* 对于 ValueQuery, 默认值为false
+
+#### Vec<T> 类型定义：
+```rust
+use sp_std::prelude::*;
+
+#[pallet::storage]
+#[pallet::getter(fn my_string)]
+pub type Mystring<T> = StorageValue<_, Vec<u8>>;
+```
+Vec定义在sp_std::prelude中引入。定义存储名字Mystring，存储单值类型，无符号整数集合。用这种方式模拟字符串。
+链上经过编码格式，可读性不高。比如，通常链上存储字符串的UTF-8编码。注意限制字符串的长度。避免占用太多存储资源。
+* 操作：push, pop, iter... https://doc.rust-lang.org/alloc/vec/struct.Vec.html
+* 对于ValueQuery，默认值为0x00。
+
+#### Percent, Permill, Perbill定点小数类型定义：
+```rust
+use sp_runtime::Permill;
+
+#[pallet::storage]
+#[pallet::getter(fn my_permill)]
+pub type MyPermill<T> = StorageValue<_, Permill>;
+```
+在sp_runtime中引入数据类型，我们定义名为MyPermill的单值存储单元，存储类型为Permill，操作类型：
+* 构造：
+* * Permill::from_percent(value);百分之几
+* * Permill::from_parts(value);一百万分之value
+* * Permill::from_rational(p, q);分母q，分子p，分子形小数。
+* 计算：
+* * permill_one.saturating_mul(permill_two);两个permill相乘
+* * my_permill * 20000 as u32；和整数相乘，并转换，注意溢出场景。
+
+API文档：https://crates.parity.io/sp_runtime/struct.Permill.html
+ 
+#### Moment时间类型定义：
+```rust
+#[pallet::config]
+pub trait Config: pallet_timestamp::Config + frame_system::Config {
+    // --snippet--
+}
+
+#[pallet::storage]
+#[pallet::getter(fn my_time)]
+pub type MyTime<T: Config> = StorageValue<_, T::Moment>;
+```
+* Moment是u64的类型别名
+* 获取链上时间：pallet_timestamp::Pallet::<T>::get()
+
+在timestamp模块定义，使用方法，让配置接口Config继承pallet_timestamp的配置接口Config，这样当前模块就拥有Moment类型定义。
+定义存储单元，名字为MyTime, 类型StorageValue为单值类型，存储数据类型T::Moment，来源于我们timestamp模块的Moment类型。
+
+#### AccountId账户类型定义：
+```rust
+#[pallet::storage]
+#[pallet::getter(fn my_account_id)]
+pub type MyAccountId<T: Config> = StorageValue<_, T::AccountId>;
+```
+* 定义在frame_system中，通常是Public key；通常为公钥信息。
+* 获取AccountId: let sender = ensure_signed(origin)?，通过ensure_signed方法获取发送方AccountId。
+
+系统模块提供存储类型AccountId，定义存储单元名为MyAccountId,为单值存储类型，存储数据类型为T::AccountId。
+系统模块提供的关联类型T::AccountId。
+
+#### struct类型定义：
+```rust
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
+pub struct People {
+    name: Vec<u8>,
+    age: u8,
+}
+
+#[pallet::storage]
+#[pallet::getter(fn my_struct)]
+pub type MyStruct<T: Config> = StorageValue<_, People>;
+```
+存储复杂信息，用结构体，定义People结构体，属性name、age。
+为了在链上存储结构体，需要让结构体实现Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default接口。使用derive自动帮我们实现。
+比如，编解码Encode、Decode实现，默认值Default的实现。
+定义存储单元名字为MyStruct，单值类型，里面存储数据为People结构体。
+
+#### enum和struct类似
+只不过，enum需要手动实现Defualt接口
+https://github.com/kaichaosun/play-substrate/blob/master/pallets/data-type/src/lib.rs#L39
+
+### 简单映射类型
+#### StorageMap类型，保存键值对
+用来保存键值对，单值类型都可以用作key或者value。
+```rust
+#[pallet::storage]
+#[pallet::getter(fn my_map)]
+pub type MyMap<T> = StorageMap<
+    _,
+    Blake2_128Concat,
+    u8,
+    Vec<u8>,
+>;
+```
+定义存储项MyMap，是StorageMap映射类型, key是u8,值是Vec<u8>，
+Blake2_128Concat是Hash算法，对key进行hash计算后的结果作为kv数据库的真正存储key。
+* key的hash算法：Blake2_128Concat(密码学安全), Twox64Concat(速度更快，但不是密码学安全的), Identity(通常用在key本身就是hash结果时，避免不必要的计算)
+* StorageMap类型，用来保存键值对，单值类型都可以用作key或者value。
+* * 插入一个元素：MyMap::<T>::insert(key, value);
+* * 通过key获取value: MyMap::<T>::get(key);
+* * 删除某个key对应的元素：MyMap::remove(key);
+* * 覆盖或者修改某个key对应的元素：
+* * * MyMap::insert(key, new_value);
+* * * MyMap::mutate(key, |old_value| old_value+1);
+* API文档：https://crates.parity.io/frame_support/pallet_prelude/struct.StorageMap.html
+ https://crates.parity.io/frame_support/storge/trait.IterableStorageMap.html实现了迭代接口，但迭代时需要注意，
+ 不能让链上迭代时间，超过区块生成时间，不然会导致无法正常出块，迭代时需要格外小心。
+ 
+#### StorageDoubleMap双键映射类型
+使用两个key来索引value，用于快速删除key1对应的任意记录，也可以遍历key1对应的所有记录，定义：
+```rust
+#[pallet::storage]
+#[pallet::getter(fn my_double_map)]
+pub type MyDoubleMap<T: Config> = StorageDoubleMap<
+    _,
+    Blake2_128Concat,
+    T::AccountId,
+    Blake2_128Concat,
+    u32,
+    Vec<u8>,
+>;
+``` 
+ 我们定义一个存储项，叫MyDoubleMap，是StorageDoubleMap类型，key1为T::AccountId, key2为u32类型，存储值为Vec<u8>,
+ 简单起见，我们都使用Blake2_128Concat哈希算法，在正式环境中需要根据上下文，根据key类型以及输入来源选择合适的哈希算法，
+ 通常情况下，当输入是由用户控制的时候，我们需要用密码学安全的哈希算法，比如Blake2_128Concat，但系统本身由系统控制，
+ 保证不会被任意输入影响，可以使用更快的Twox64Concat哈希算法。
+ 如果key本身是一个密码学安全的输出，或哈希结果的输出，可以直接使用Identity机制，避免额外的哈希计算的开销。
+ * 插入一个元素： MyDoubleMap::<T>::insert(key1, key2, value);
+ * 获取某一个元素： MyDoubleMap::<T>::get(key1, key2);
+ * 删除某一个元素：MyDoubleMap::<T>::remove(key1, key2);
+ * 删除key1对应的所有元素：MyDoubleMap::<T>::remove_prefix(key1);
+ * API文档：https://crates.parity.io/frame_support/pallet_prelude/struct.StorageDoubleMap.html
+  https://crates.parity.io/frame_support/storage/trait_IterableStorageDoubleMap.html
+ 迭代时需要注意，迭代时间不能超过出块时间，否则无法正常出块。
+
+## 存储的初始化
+### 创世区块的数据初始化：
+```rust
+#[pallet::genesis_config]
+pub struct GenesisConfig {
+    pub value: u8,
+}
+
+#[cfg(feature = "std")]
+impl Default for GenesisConfig<T> {
+    fn default() -> Self {
+        Self { value: Default::default() }
+    }
+}
+
+#[pallet::genesis_build]
+impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+    fn build(&self) {
+        MyValue::<T>::put(&self.value);
+    }
+}
+```
+通常我们在创世块存储一些模块需要的数据，我们定义GenesisConfig结构体，属性名字value，类型u8。
+需要使用genesis_config宏表示需要在创世区块中配置，配置通常发生在chain.spec文件里。
+还需要实现Default接口，值很简单，这里是u8类型的default值0.
+还需要实现GenesisBuild接口，当我们初始化时，对我们chain.Spec文件里面初始化的值进行一系列操作进行更新链上的存储单元，
+比如这里，我们在build的时候，我们将chain.Spec里配置的初始值value拿出来放在我们MyValue存储项里面。
+* 演示：https://github.com/paritytech/substrate/blob/master/frame/sudo/src/lib.rs
+
+## 最佳实践
+* 最小化链上存储
+* * 哈希值
+* * 设置列表容量
+* Verify First, Write Last
+* 事务管理：Transactional macro原子化操作宏，可回滚链上操作。
+
+## 其他Tips
+* 可以通过pub关键字设置存储单元的可见范围
+* ValueQuery设置默认值，如：https://github.com/paritytech/substrate/blob/efd262f1a791be0a7986b25bd302338a590b46d3/frame/support/src/storage/types/value.rs#L228
+* 在frame目录下查找对应的最新用法
+* pallet::storage宏的说明文档
+
 ## 课后作业
 ### 第一题：
 列出3个常用的宏、3个常用的存储数据结构
