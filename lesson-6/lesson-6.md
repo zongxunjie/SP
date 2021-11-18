@@ -31,7 +31,7 @@
 >* E. Polkadot-JS App是官方的Polkadot钱包，而Polkadot-JS API则提供了官方的JS库去连现在主流的区块链
 >网络（Substrate，以太坊，比特币等）。
 
-答案：A、D
+答案：A、C、D
 
 * 3. 你可以在Polkadot-JS App内做什么操作？（多选）
 >* A. 查看Substrate网络区块信息
@@ -59,7 +59,7 @@
 >* D. 在Toolbox里，Sign message tab里，先发一个签了名的信息作核实。
 >* E. 在Toolbox里，Verify signature tab里，先发一个签了名的信息作核实。
 
-答案：C、D
+答案：C
 
 * 6. 在Polkadot-JS API里，数字默认是用哪个类型代表？
 >* A. JS里默认的数字类型
